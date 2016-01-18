@@ -1,0 +1,10 @@
+venv
+examples
+*.pyc
+*.sublime-project
+*.sublime-workspace
+save.txt
+*.log
+*.cfg
+_old
+js
