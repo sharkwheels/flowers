@@ -145,15 +145,17 @@ def main():
 
 			try:
 				p1 = namedMyos[0][1]
-				player1 = {'name': 'player1','pose': p1.pose, 'orientation':p1.orientation, 'acceleration':p1.acceleration, 'arm':p1.arm, 'gyro':p1.gyroscope}
+				player1 = {'name': 'player1','pose': p1.pose, 'orientation':p1.orientation, 'acceleration':p1.acceleration, 'arm':p1.arm, 'gyro':p1.gyroscope, 'emg': p1.emg}
 				#print(player1)
+				print(p1.rssi)
 				playerData.append(player1)
 			except IndexError:
 				pass
 
 			try:
 				p2 = namedMyos[1][1]
-				player2 = {'name': 'player2','pose': p2.pose, 'orientation':p2.orientation,'acceleration':p2.acceleration, 'arm':p2.arm, 'gyro':p2.gyroscope}
+				p2.set_stream_emg(libmyo.StreamEmg.enabled)
+				player2 = {'name': 'player2','pose': p2.pose, 'orientation':p2.orientation,'acceleration':p2.acceleration, 'arm':p2.arm, 'gyro':p2.gyroscope, 'emg': p2.emg}
 				#print(player2)
 				playerData.append(player2)
 			except IndexError:
