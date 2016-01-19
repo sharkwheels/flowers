@@ -162,7 +162,7 @@ def main():
 			#print("TOSEND",sendToHelper)
 			#print(" ")
 			
-			#parse_data(playerData)
+			parse_data(playerData)
 			time.sleep(0.1) ## this is just here to slow it down while debugging
 			
 		print("Disconnecting")
