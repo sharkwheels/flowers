@@ -147,7 +147,6 @@ def main():
 				p1 = namedMyos[0][1]
 				player1 = {'name': 'player1','pose': p1.pose, 'orientation':p1.orientation, 'acceleration':p1.acceleration, 'arm':p1.arm, 'gyro':p1.gyroscope, 'emg': p1.emg}
 				#print(player1)
-				print(p1.rssi)
 				playerData.append(player1)
 			except IndexError:
 				pass
