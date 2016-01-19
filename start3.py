@@ -136,10 +136,6 @@ def main():
 				print("player2 -shortx2-")
 			
 		print(namedMyos)
-		#thing = namedMyos[0]
-		#print(dir(thing[1]))
-		#print(thing[1].set_stream_emg(libmyo.StreamEmg.enabled)) #?? hmm.
-		#print(thing[1].emg)
 
 		while hub.running and myo.connected:
 
