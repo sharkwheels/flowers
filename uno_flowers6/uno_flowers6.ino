@@ -1,18 +1,8 @@
-// Uno Flowers v2.0 (copy of uno tentacle)
-// get this working w/ 1 first
-// Nadine L.
-// January 2016
-
-//// LIBRARIES /////////////////////////////////////////////////////
-
 #include <Adafruit_NeoPixel.h>
-//#include <Servo.h>
-#include <Adafruit_TiCoServo.h>
+#include <Wire.h>
+#include <Adafruit_PWMServoDriver.h>
 
-//// NEO PATTERNS CLASS /////////////////////////////////////////////////////
-//// https://learn.adafruit.com/multi-tasking-the-arduino-part-3/utility-functions ////
 
- 
 // Pattern types supported:
 enum  pattern { NONE, RAINBOW_CYCLE, THEATER_CHASE, COLOR_WIPE, SCANNER, FADE };
 // Patern directions supported:
@@ -71,7 +61,7 @@ class NeoPatterns : public Adafruit_NeoPixel
             }
         }
     }
-  
+	
     // Increment the Index and reset at the end
     void Increment()
     {
@@ -302,178 +292,377 @@ class NeoPatterns : public Adafruit_NeoPixel
     }
 };
 
-//// SERVO //////////////////////////////////////
-class FlowerServo {
-  Adafruit_TiCoServo servo;              // the servo
+//////////////////////////////////////// LOGIC //////////////////////////////////////////////
 
-  public:
-    FlowerServo(){
-      // eventually stuff
-      int position;
-      int last_position;
-      int increment;
-      
-    }
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
-  void Attach(int pin){
-    servo.attach(pin);
-  }
-  void Detach(){
-    servo.detach();
-  }
-  
-  void Open(){
-    servo.write(179);
-  }
+#define servoMin  170 // this is the 'minimum' pulse length count (out of 4096)
+#define servoMax  800 // this is the 'maximum' pulse length count (out of 4096)
 
-  void Close(){
-    servo.write(20);
-  }
-};
+
+int pixelPins[] = {11,9};
+int servoPins[] = {15,13};
+
+const size_t n = sizeof(pixelPins) / sizeof(pixelPins[0]);
+const size_t o = sizeof(servoPins) / sizeof(servoPins[0]);
+
+
+// Initialize everything and prepare to start
+NeoPatterns Strip1(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
+NeoPatterns Strip2(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
 
 
 //// SERIAL AND PYTHON //////////////////////////////////////////////
 byte incomingByte; // from python
 int command = 0; // command (1 = open, 2 = close)
-
-//// SERVO //////////////////////////////////////////////////////////
-static const uint8_t servoPins[] = {9,10};
-
 int startServo = 0; // the incoming command shit
 
-FlowerServo Flower1;
-FlowerServo Flower2;
-
-
-//// NEO PATTERNS ///////////////////////////////////////////////////////
-
-NeoPatterns Strip1(32, 12, NEO_GRB + NEO_KHZ800, &Strip1Complete); 
-NeoPatterns Strip2(5, 11, NEO_GRB + NEO_KHZ800, &Strip2Complete);
-
- 
-//// INITIALIZE //////////////////////////////////////////////////////////
+//// GAME END ////////////////////////////////////////
+bool endOfGame = false;
 
 void setup()
 {
-  // serial
   Serial.begin(9600);
-  Serial.setTimeout(20); // set the timeout, the default is 1 second which is nuts.
+    
+   
 
-  // servo instances
-  Flower1.Attach(servoPins[0]); // attach servo pin 5
-  Flower2.Attach(servoPins[1]); // attach servo pin 6
-  
-  
-  // neopixel instances 
-  Strip1.begin();
-  Strip2.begin();
-  Strip1.ColorWipe(Strip1.Color(100, 0, 0), 20);
-  Strip2.ColorWipe(Strip1.Color(0, 100, 0), 20);
-  Strip1.Update();
-  Strip2.Update();
+    shuffle();
 
- 
+    Strip1.begin();
+    Strip2.begin();
+    
+    // Kick off a pattern
+    Strip1.ColorWipe(Strip1.Color(100,0,0), 20); //r
+    Strip2.ColorWipe(Strip2.Color(0,100,0), 20); // g
+    //Strip1.RainbowCycle(3);
+    //Strip2.RainbowCycle(3);
+
+    pwm.begin();
+	pwm.setPWMFreq(60);  // Analog servos run at ~60 Hz updates
+	yield();
+
 }
  
-//// GO YOU BASTARD /////////////////////////////////////////////////////
-
+// Main loop
 void loop()
 {
-  
-  Strip2.Update();
-  Strip1.Update();
-
-  if (Serial.available() > 0) 
-  {
-      //incomingByte = Serial.parseInt(); // use if testing from arduino input
-      incomingByte = Serial.read(); // use if live
-      command = incomingByte;
-      startServo = ServoGo(command);
-      
-  }
-
-  if (startServo == 11)
-  {
-    //Serial.println(startServo);
-    Flower1.Open();
-    // change neopixel patterns
-    Strip1.ActivePattern = SCANNER;
-    Strip1.TotalSteps = 32;
-  }
-  else if (startServo == 12)
-  {
-    Flower1.Close();
-    //Serial.println(startServo);
-    Strip1.ActivePattern = COLOR_WIPE;
-    Strip1.Interval = 20;
+    // Update the rings.
+    Strip1.setPin(pixelPins[0]);
+    Strip2.setPin(pixelPins[1]);
+    Strip1.Update();
+    Strip2.Update();
     
-  } 
-  
-  if (startServo == 21)
-  {
-    Flower2.Open();
-    Strip2.ActivePattern = SCANNER;
-    Strip2.TotalSteps = 5;
-  }
-  else if (startServo == 22){
-    Flower2.Close();
-    Strip2.ActivePattern = COLOR_WIPE;
-    Strip2.Interval = 20;
-  }
- 
-}
 
-//// SERVO COMMAND /////////////////////////////
+    if (Serial.available() > 0) 
+	{
+		//incomingByte = Serial.parseInt(); // use if testing from arduino input
+		incomingByte = Serial.read(); // use if live
+		command = incomingByte;
+		startServo = ServoGo(command);
+		
+		  
+	}
+
+	if (!endOfGame){
+
+		if (startServo == 11)
+		{	
+
+			if(pixelPins[0] == 11)
+			{
+				pwm.setPWM(servoPins[0], 0, servoMax); // grab servo 15
+				strip1open();
+			
+			}
+			else if(pixelPins[0] == 9)
+			{
+				pwm.setPWM(servoPins[1], 0, servoMax); // grab servo 13
+				strip1open();
+			} 
+			
+		
+		
+		}
+		else if(startServo == 12)
+		{
+		
+			if(pixelPins[0] == 11)
+			{
+				pwm.setPWM(servoPins[0], 0, servoMin); // grab servo 15
+				strip1close();
+            
+			}
+			else if(pixelPins[0] == 9)
+			{
+				pwm.setPWM(servoPins[1], 0, servoMin); // grab servo 13
+				strip1close();
+			} 
+
+		}
+		else if(startServo == 13){
+			if(pixelPins[0] == 11)
+			{
+				pwm.setPWM(servoPins[0], 0, servoMin); // grab servo 15
+				strip1finish();
+            
+			}
+			else if(pixelPins[0] == 9)
+			{
+				pwm.setPWM(servoPins[1], 0, servoMin); // grab servo 13
+				strip1finish();
+			} 
+		}
+
+
+		/// Flower 2 /////
+		if (startServo == 21)
+		{
+			if(pixelPins[1] == 11){
+				pwm.setPWM(servoPins[0], 0, servoMax); // grab servo 15
+				strip2open();
+			
+			}
+			else if(pixelPins[1] == 9)
+			{	
+				pwm.setPWM(servoPins[1], 0, servoMax); // grab servo 13
+				strip2open();
+			}
+		
+		}
+		else if(startServo == 22)
+		{
+			if(pixelPins[1] == 11){
+				pwm.setPWM(servoPins[0], 0, servoMin); // grab servo 15
+				strip2close();
+			
+			}
+			else if(pixelPins[1] == 9)
+			{
+				pwm.setPWM(servoPins[1], 0, servoMin); // grab servo 13
+				strip2close();
+			}
+		
+		}
+		else if(startServo == 23){
+			if(pixelPins[1] == 11){
+				pwm.setPWM(servoPins[0], 0, servoMin); // grab servo 15
+				strip2finish();
+			
+			}
+			else if(pixelPins[1] == 9)
+			{
+				pwm.setPWM(servoPins[1], 0, servoMin); // grab servo 13
+				strip2finish();
+			}
+
+		}
+
+		
+
+	////////////////////////////////////////////////
+	} // end of !game
+	////////////////////////////////////////////////
+
+	if (startServo == 70) 
+	{
+	endOfGame = true;
+	shuffle();
+	resetGame();
+	}
+
+
+} // end of loop
 
 int ServoGo(int com)
 {
-  Serial.println("!inServoGo");
-  Serial.println(com);
-  return com;
+	Serial.println("!inServoGo");
+	Serial.println(com);
+	return com;
+}
+
+void shuffle(){
+
+	Serial.print("Shuffling pixel pins");
+  	for (size_t i = 0; i < n - 1; i++)
+    {
+        size_t j = random(1, n - i);
+        //size_t j = i + rand() / (RAND_MAX / (n - i) + 1); // ?? look up how this actually works
+        int t = pixelPins[i];
+        pixelPins[i] = pixelPins[j];
+        pixelPins[j] = t;  
+    }
+
+    Serial.println("------------pixelPins--------------");
+    for(size_t y = 0; y < n; y++) 
+    {
+    	Serial.println(pixelPins[y]);
+    }
+
+    
+	
+}
+
+void resetGame(){
+	
+	// reset all the pins
+	pwm.setPWM(servoPins[0], 0, servoMin);
+	pwm.setPWM(servoPins[1], 0, servoMin);
+
+	restingStrips();
+	// reset the shit out of everything
+	Serial.println("game end, resetting");
+	endOfGame = false;
+	startServo = 0;
+	
+	
+}
+
+/////// NEOPATTERNS //////////////////////////
+
+void restingStrips(){
+
+	Strip1.ActivePattern = COLOR_WIPE;
+    Strip1.Interval = 20;
+    Strip1.Color1 = Strip1.Color(100,0,0); 
+
+    Strip2.ActivePattern = COLOR_WIPE;
+	Strip2.Interval = 20;
+	Strip2.Color1 = Strip2.Color(0,100,0);
+	
+
+}
+
+/// STRIP 1 ///////////////////////////////////
+
+void strip1open(){
+	// open and flash
+	Strip1.ActivePattern = THEATER_CHASE;
+    Strip1.Interval = 100;
+    Strip1.Color1 = Strip1.Color(100,0,100);        
+    Strip1.Color2 = Strip1.Color(0,0,100);
+}
+
+void strip1close(){
+	// close back to original color
+	Strip1.ActivePattern = COLOR_WIPE;
+    Strip1.Interval = 20;
+    Strip1.Color1 = Strip1.Color(100,0,0); 
+	
+}
+
+void strip1finish(){
+	// become a rainbow
+	Strip1.ActivePattern = RAINBOW_CYCLE;
+	Strip1.Interval = 3;
+	
+	
+}
+
+/// STRIP 2 ///////////////////////////////////
+
+void strip2open(){
+	Strip2.ActivePattern = THEATER_CHASE;
+	Strip2.Interval = 100;
+	Strip2.Color1 = Strip2.Color(100,0,0);        
+   	Strip2.Color2 = Strip2.Color(0,100,0);
+
+}
+
+void strip2close(){
+	Strip2.ActivePattern = COLOR_WIPE;
+	Strip2.Interval = 20;
+	Strip2.Color1 = Strip2.Color(0,100,0);
+	
+
+}
+
+void strip2finish(){
+
+	Strip2.ActivePattern = RAINBOW_CYCLE;
+	Strip2.Interval = 3;
+	
+}
+
+/// STRIP 3 ///////////////////////////////////
+
+
+void stripComplete() {
+
+	//Strip1.ColorWipe(Strip1.Color(100,0,0), 20); //r
+    //Strip2.ColorWipe(Strip2.Color(0,100,0), 20); // g
+    
+
 }
 
 
-//// COMPLETION ROUTINES - get called on completion of a pattern ///////////////////
 
-
-void Strip1Complete()
-{
-  // Just leave it empty for now
-  
-}
-
-void Strip2Complete()
-{
-  /// Just leave it empty for now
-  
-}
 
 /*
-if (startServo == 1)
-  {
-    //Flower1.Open();
-    // change neopixel patterns
-    //Serial.println(startServo);
-    Strip1.ActivePattern = THEATER_CHASE;
-    Strip1.Interval = 40;
-    Strip2.ActivePattern = COLOR_WIPE;
+int pins[] = {6, 7, 8};
+int positions[] = {0, 1, 2};
+Adafruit_NeoPixel strip[] = { Adafruit_NeoPixel(10, 11 , NEO_GRB),
+                             Adafruit_NeoPixel(10, 10 , NEO_GRB),
+                             Adafruit_NeoPixel(10, 9 , NEO_GRB)
+                           };
 
-  } else if (startServo == 2){
-    //Flower2.Close();
-    //Serial.println(startServo);
-    Strip2.ActivePattern = THEATER_CHASE;
-    Strip2.Interval = 100;
-    Strip1.ActivePattern = COLOR_WIPE;
+void setup() {
+ for(int i = 0; i> 2; i++){
+ strip[i].begin();
+ strip[i].show();
+ }
+}
 
-  } else {
-    Strip1.ActivePattern = COLOR_WIPE;
-    Strip2.ActivePattern = COLOR_WIPE;
-  }
+void loop(){
+ for(int i = 0; i> 2; i++){
+   strip[positions[i]].setPixelColor(0, strip[positions[i]].Color(100, 100, 100));
+   strip[positions[i]].show();
+ }
+ shuffle();
+}
+
+int shuffle(int positions){ 
+ // change positions{ 1, 2 3} to {3, 1, 2}
+ return positions;
+}
 
 */
-//Strip2.RainbowCycle(random(0,10));
-//Strip1.RainbowCycle(random(0,10));
-  //Strip1.TheaterChase(Strip1.Color(255,255,0), Strip1.Color(0,0,50), 100);
-  //Strip1.ColorWipe(Strip1.Color(255, 0, 0), 20);
-  //Strip1.Fade(Strip1.Color(255,0,0), Strip1.Color(255,0,255), 100, 100, FORWARD);
-  //Strip1.Scanner(Strip1.Color(255,0,0),20);
+
+
+/*
+// Initialize everything and prepare to start
+NeoPatterns Strip1(32, 0, NEO_GRB + NEO_KHZ800, &StripComplete);
+NeoPatterns Strip2(32, 0, NEO_GRB + NEO_KHZ800, &StripComplete);
+
+void setup()
+{
+  Serial.begin(9600);
+    
+    // Initialize all the pixelStrips
+    tester();
+
+    Strip1.begin();
+    Strip2.begin();
+    
+    // Kick off a pattern
+    Strip1.TheaterChase(Strip1.Color(100,0,100), Strip1.Color(0,0,50), 100);
+    Strip2.TheaterChase(Strip2.Color(100,0,0), Strip2.Color(0,0,50), 100);
+
+}
+ 
+// Main loop
+void loop()
+{
+    // Update the rings.
+    Strip1.Update();
+    Strip2.Update();
+}
+
+void tester(){
+	Strip1.setPin(11);
+	Strip2.setPin(9);
+}
+
+void StripComplete() {
+
+}*/
+
