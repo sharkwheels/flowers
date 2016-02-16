@@ -32,12 +32,12 @@ isActiveFour = False
 closedFlowers = ['flower1','flower2','flower3','flower4']		
 openFlowers = []											
 finishedFlowers = []
-finalFlower = False
+gameEnd = False
 
 
 ### PYTHON SERIAL OUT #########################################
 
-ser = serial.Serial('/dev/cu.usbmodem14231', 9600)
+ser = serial.Serial('/dev/cu.usbmodem14221', 9600)
 time.sleep(3)
 
 if ser:
@@ -112,6 +112,7 @@ def parse_data(playerData):
 		p2pose = player2['pose']
 
 	"""
+	print("*************************")
 	print('P1-roll_w: ', p1roll)
 	print('P1-pitch_w: ', p1pitch)
 	print('P1-yaw_w: ', p1yaw)
@@ -122,37 +123,35 @@ def parse_data(playerData):
 	"""
 
 	if player1 and player2:
+		##print("gameEnd: {0}".format(gameEnd))
+		if not gameEnd:
 
-		## command to open and close flower one #################
-
-		## open flower one ########################
-		## both arms are pointed down
-
-		
-		if p2pitch == 7 and p1pitch == 7 and not isActiveOne:
-			game_logic("f1open")
+			## open flower one ########################
+			## both arms are pointed down
+			if p2pitch == 7 and p1pitch == 7 and not isActiveOne:
+				game_logic("f1open")
+				
 			
-		
-		## open flower two #################
-		## both arms are held up over head
-		
-		if p2pitch == 10 and p1pitch == 10 and not isActiveTwo:
-			game_logic("f2open")
+			## open flower two #################
+			## both arms are held up over head
 			
-		## open flower three ##############
-		## both arms straight out
-		if p2pitch == 8 and p2pose == 'fist' and p1pitch == 8 and p1pose == 'fist' and not isActiveThree:
-			game_logic("f3open")
+			if p2pitch == 10 and p1pitch == 10 and not isActiveTwo:
+				game_logic("f2open")
+				
+			## open flower three ##############
+			## both arms straight out
+			if p2pitch == 8 and p2pose == 'fist' and p1pitch == 8 and p1pose == 'fist' and not isActiveThree:
+				game_logic("f3open")
 
-		## open flower 4 ##############
-		## both arms straight out in front of you
-		if p2pitch == 10 and p1pitch == 7 and not isActiveFour:
-			game_logic("f4open")
-		
-		
-	else:
-		print("I'm sorry, you need two players for this to work")
-
+			## open flower 4 ##############
+			## both arms straight out in front of you
+			if p2pitch == 10 and p1pitch == 7 and not isActiveFour:
+				game_logic("f4open")
+			
+			
+		else:
+			print("I'm sorry, you need two players for this to work")
+	
 
 
 def euler_angles(quatX,quatY,quatZ,quatW):
@@ -192,11 +191,11 @@ def open_flower(targetF,timerCom,serialCom):
 
 		## call the timer to start
 		start(targetF,timerCom)
-		print("open: open: {0} | closed: {1} | finishedFlowers: {2}".format(openFlowers,closedFlowers,finishedFlowers))
+		
 
 	except IndexError or ValueError(e):  ## expect just error(e)
 		pass
-	#print("open: {0} | closed: {1} | finishedFlowers: {2}".format(openFlowers,closedFlowers,finishedFlowers))
+	print("open: {0} | closed: {1} | finishedFlowers: {2}".format(openFlowers,closedFlowers,finishedFlowers))
 
 def close_flower(targetF,serialCom):
 	try:
@@ -226,18 +225,9 @@ def finish_flower(targetF,serialCom):
 
 	except IndexError or ValueError(e):  ## expect just error(e)
 		pass
-	print("finish: {0} | closed: {1} | finishedFlowers: {2}".format(openFlowers,closedFlowers,finishedFlowers))
+	print("open: {0} | closed: {1} | finishedFlowers: {2}".format(openFlowers,closedFlowers,finishedFlowers))
 
-def end_game(serialCom):
-	finalFlower = True
-	if finalFlower:
-		## send the command to open flower 5
-		#ser.write(struct.pack('>B', serialCom))
-		## time.sleep(200) #two minutes or something.
-		## move all finished flowers back to open flowers
-		## siwtch off myo hub?
-		## sleep?
-		pass
+
 
 #### MAIN GAME LOGIC #################################################################
 
@@ -251,15 +241,19 @@ def game_logic(command):
 	global closedFlowers
 	global openFlowers
 	global finishedFlowers
+	global gameEnd
+	
 
 	#if command:
 		#print("GLOBAL: open: {0} | closed: {1} | finishedFlowers: {2}".format(openFlowers,closedFlowers,finishedFlowers))
 
 
 	### FLOWER 1 LOGIC ###########################################################################
+
+	### flower 1 will finsih, when flower2 is open longer than flower 1.
 	
 	if command == 'f1open':
-		print(command)
+		#print(command)
 		
 		## if (target) is not in finishedFlowers and (target) is not open...
 		if 'flower1' in closedFlowers and 'flower1' not in finishedFlowers:
@@ -275,9 +269,9 @@ def game_logic(command):
 				finish_flower('flower1',13)
 
 
-	# else...run
-
 	### FLOWER 2 LOGIC #########################################################################################
+
+	### flower 2 will finish IF flower 3 is open longer than flower2 AND flower1 is finished.
 
 	if command == 'f2open':
 		if 'flower2' in closedFlowers and 'flower2' not in finishedFlowers: #(target)
@@ -288,10 +282,14 @@ def game_logic(command):
 				close_flower('flower2',22)
 			elif 'flower3' in openFlowers and 'flower1' in finishedFlowers:
 				finish_flower('flower2',23)
+			else:
+				close_flower('flower2',22)
 				
 
-
+	
 	### FLOWER 3 LOGIC #########################################################################################
+
+	## flower 3 will finish if flower1 AND flower2 are finished and flower 4 is open longer than flower 3
 
 	if command == 'f3open':
 		if 'flower3' in closedFlowers and 'flower3' not in finishedFlowers:
@@ -302,14 +300,39 @@ def game_logic(command):
 				close_flower('flower3',32)
 			elif 'flower4' in openFlowers and all(x in finishedFlowers for x in ['flower1', 'flower2']):
 				finish_flower('flower3',33)
+			else:
+				close_flower('flower3',32)
 
+	
 	### FLOWER 4 LOGIC (sepcial case) ###########################################################################
-
+	### flower 4 will finish if flower1 AND flower2 AND flower3 are finished
+	
 	if command == 'f4open':
 		if 'flower4' in closedFlowers and 'flower4' not in finishedFlowers:
-			end_game(40)
-			
+			open_flower('flower4',4,41) 
+	elif command == 'f4close':
+		if not isActiveFour:
+			if all(y in finishedFlowers for y in ['flower1', 'flower2','flower3']):
+				finish_flower('flower4',43)
+				gameEnd = True;
+			else:
+				close_flower('flower4',42)
+	
+	# sort the list on each pass to keep flower1 / 2 etc...in order.	
 	closedFlowers.sort()
+
+	if(gameEnd):
+		print("gameEnd: {0}".format(gameEnd))
+
+		closedFlowers = list(finishedFlowers)
+		del finishedFlowers[:]
+		print("openFlowers: {0}".format(openFlowers))
+		gameEnd = False;
+
+		## make sure that was done
+		print("open: {0} | closed: {1} | finishedFlowers: {2}".format(openFlowers,closedFlowers,finishedFlowers))
+		print("gameEnd: {0}".format(gameEnd))
+		#time.sleep(1) # sleep for 1 minute
 	
 ### TIMER STUFF ######################################################
 
@@ -332,7 +355,7 @@ def countdown(pName,com):
 	print("{0} countdown - command{1} ".format(pName,com))
 	retry = 0
 	while True:
-		toRun = randint(10,20)
+		toRun = randint(5,10)
 		print("{0}:{1}:{2}".format(pName,toRun,retry))
 		retry += 1
 		if retry > toRun:
@@ -350,7 +373,7 @@ def countdown(pName,com):
 				game_logic("f4close")
 			break
 		time.sleep(1)
-	print("{0} ended".format(pName))
+	print("{0} timer-done".format(pName))
 	print(isActiveOne,isActiveTwo,isActiveThree,isActiveFour)
 
 def start(pName,com):
@@ -388,12 +411,12 @@ def main():
 			print("No myo connected after 5 seconds")
 			return
 
-		#global ser
-		ser.write(struct.pack('>B', 70))
-		
 		if not ser: 
 			print("There is no serial connection.")
 			return
+
+		# send a shuffle command
+		ser.write(struct.pack('>B', 70))
 
 		rawMyos = feed.get_devices() 
 		namedMyos = []
