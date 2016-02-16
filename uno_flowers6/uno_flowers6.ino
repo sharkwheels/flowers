@@ -296,31 +296,35 @@ class NeoPatterns : public Adafruit_NeoPixel
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
-#define servoMin  170 // this is the 'minimum' pulse length count (out of 4096)
-#define servoMax  800 // this is the 'maximum' pulse length count (out of 4096)
+#define servoMin  180 // this is the 'minimum' pulse length count (out of 4096)
+#define servoMax  500 // this is the 'maximum' pulse length count (out of 4096)
 
 
-int pixelPins[] = {11,10,9};
-int servoPins[] = {15,14,13};
+int pixelPins[] = {11,10,9,8};
+int servoPins[] = {15,14,13,12};
+int finalServo = 6;
+int finalStrip = 7;
 
 const size_t n = sizeof(pixelPins) / sizeof(pixelPins[0]);
 const size_t o = sizeof(servoPins) / sizeof(servoPins[0]);
-
 
 // Initialize everything and prepare to start
 NeoPatterns Strip1(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
 NeoPatterns Strip2(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
 NeoPatterns Strip3(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
-//NeoPatterns Strip4(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
-
+NeoPatterns Strip4(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
+NeoPatterns Fstrip(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
 
 //// SERIAL AND PYTHON //////////////////////////////////////////////
 byte incomingByte; // from python
 int command = 0; // command (1 = open, 2 = close)
 int startServo = 0; // the incoming command shit
 
-//// GAME END ////////////////////////////////////////
+//// GAME CONTROL ////////////////////////////////////////
 bool endOfGame = false;
+unsigned long timer; // the timer
+boolean timedOut = false; // set to true when timer fired
+unsigned long wait = 10000; // the timeout interval (10 sec)
 
 void setup()
 {
@@ -331,33 +335,41 @@ void setup()
     Strip1.begin();
     Strip2.begin();
     Strip3.begin();
-    //Strip4.begin();
+    Strip4.begin();
+    Fstrip.begin();
     
     // Kick off a pattern
     Strip1.ColorWipe(Strip1.Color(100,0,0), 20); //red
     Strip2.ColorWipe(Strip2.Color(0,100,0), 20); // green
-    Strip3.ColorWipe(Strip1.Color(100,0,100), 20); // purple
-    //Strip4.ColorWipe(Strip2.Color(0,0,100), 20); // blue
+    Strip3.ColorWipe(Strip3.Color(100,0,100), 20); // purple
+    Strip4.ColorWipe(Strip4.Color(0,0,100), 20); // blue
+    Fstrip.ColorWipe(Strip4.Color(100,100,100), 20); // white
 
     pwm.begin();
 	pwm.setPWMFreq(60);  // Analog servos run at ~60 Hz updates
 	yield();
+    
+    timedOut = false; // allow timer to fire
+    timer = millis(); // start timer
 
 }
  
 //// LOOP ////////////////////////////////////////
 void loop()
 {   
+
     /// Strip Update and Master Pins //////////////////////
     Strip1.setPin(pixelPins[0]);
     Strip2.setPin(pixelPins[1]);
     Strip3.setPin(pixelPins[2]);
-    //Strip4.setPin(pixelPins[3]);
+    Strip4.setPin(pixelPins[3]);
+    Fstrip.setPin(finalStrip);
 
     Strip1.Update();
     Strip2.Update();
     Strip3.Update();
-    //Strip4.Update();
+    Strip4.Update();
+    Fstrip.Update();
 
     /// Serial Start and Read ////////////////////////////////////
     if (Serial.available() > 0) 
@@ -367,6 +379,8 @@ void loop()
         command = incomingByte;
         startServo = ServoGo(command);  
     }
+
+
 
     /// Servo and Light Control /////////////////////////////////////////////
 
@@ -415,16 +429,47 @@ void loop()
             finishFlowers(pixelPins[2],3);
         }
 
+        /// FOUR //////////////////////////////////////////////////
+        
+        if (startServo == 41)
+        {
+            openFlowers(pixelPins[3],4);
+        }
+        else if(startServo == 42)
+        {
+            closeFlowers(pixelPins[3],4);
+        }
+        else if(startServo == 43)
+        {   
 
-    } 
+            // this is techinall the end of the game. Flower 4 is FINISHED. Which means all the 
+            // previous flowers are also finsihed.
 
-    /// End of Game //////////////////////////////////////////////
-    if (startServo == 70) 
-    {
-        endOfGame = true;
-        shuffle();
-        resetGame();
+            finishFlowers(pixelPins[3],4);
+            pwm.setPWM(finalServo, 0, servoMax);
+            finalDisplay();
+            // wait 5 seconds
+            //delay(5000);
+            
+            if ((!timedOut) && ((millis() - timer) > wait)) {
+                timedOut = true;
+                startServo = 70;
+                timedOut = false;
+                timer = millis();
+            }
+        }
+           
+
     }
+
+    /// RESET GAME //////////////////////////////////////////////
+    if (startServo == 70) 
+    {   
+        endOfGame = true;
+        resetGame();  
+    }
+
+
 
 }
 
@@ -435,168 +480,6 @@ int ServoGo(int com)
     Serial.println("!inServoGo");
     Serial.println(com);
     return com;
-}
-
-
-void openFlowers(int p, int s){
-    if(p == 11)
-    {
-        pwm.setPWM(servoPins[0], 0, servoMax); // grab servo 15
-        if(s == 1){
-            strip1open(); 
-        }
-        else if(s == 2)
-        {
-            strip2open();
-        }
-        else if(s == 3)
-        {
-            strip3open();
-            Serial.println(p);
-        }
-                
-    }
-    else if(p == 10)
-    {
-        pwm.setPWM(servoPins[1], 0, servoMax); // grab servo 14
-        if(s == 1){
-            strip1open(); 
-        }
-        else if(s == 2){
-            strip2open();
-        }
-        else if(s == 3)
-        {
-            strip3open();
-            Serial.println(p);
-        }
-        
-    }
-    else if(p == 9)
-    {
-        pwm.setPWM(servoPins[2], 0, servoMax); // grab servo 13
-        if(s == 1){
-            strip1open(); 
-        }
-        else if(s == 2){
-            strip2open();
-        }
-        else if(s == 3)
-        {
-            strip3open();
-            Serial.println(p);
-        }
-    } 
-}
-
-void closeFlowers(int p, int s)
-{
-    if(p == 11)
-    {
-        pwm.setPWM(servoPins[0], 0, servoMin); // grab servo 15
-        if(s == 1)
-        {
-            strip1close();
-        }
-        else if(s == 2)
-        {
-            strip2close();
-        }
-        else if(s == 3)
-        {
-            strip3close();
-
-        }
-            
-    }
-    else if(p == 10)
-    {
-        pwm.setPWM(servoPins[1], 0, servoMin); // grab servo 14
-        if(s == 1)
-        {
-            strip1close();
-        }
-        else if(s == 2)
-        {
-            strip2close();
-        } 
-        else if(s == 3)
-        {
-            strip3close();
-        } 
-                
-    }
-    else if(p == 9)
-    {
-        pwm.setPWM(servoPins[2], 0, servoMin); // grab servo 13
-        if(s == 1)
-        {
-            strip1close();
-        }
-        else if(s == 2)
-        {
-            strip2close();
-        } 
-        else if(s == 3)
-        {
-            strip3close();
-        }
-    } 
-}
-
-void finishFlowers(int p, int s)
-{
-    if(p == 11)
-    {
-        pwm.setPWM(servoPins[0], 0, servoMax); // grab servo 15
-        if(s == 1)
-        {
-            strip1finish();  
-        }
-        else if(s == 2)
-        {
-            strip2finish();  
-        }
-        else if(s == 3)
-        {
-            strip3finish();  
-        }   
-            
-    }
-    else if(p == 10)
-    {
-        pwm.setPWM(servoPins[1], 0, servoMax); // grab servo 14
-        if(s == 1)
-        {
-            strip1finish();  
-        }
-        else if(s == 2)
-        {
-            strip2finish(); 
-        }
-        else if(s == 3)
-        {
-            strip3finish();  
-        } 
-                
-    } 
-    else if(p == 9)
-    {
-        pwm.setPWM(servoPins[2], 0, servoMax); // grab servo 13
-        if(s == 1)
-        {
-            strip1finish();  
-        }
-        else if(s == 2)
-        {
-            strip2finish(); 
-        }
-        else if(s == 3)
-        {
-            strip3finish();  
-        } 
-                
-    }
 }
 
 void shuffle()
@@ -620,27 +503,304 @@ void shuffle()
 
 }
 
-void resetGame()
-{
+void finalDisplay(){
     
-    // reset all the pins
+    Fstrip.ActivePattern = THEATER_CHASE;
+    Fstrip.Interval = 100;
+    Fstrip.Color1 = Fstrip.Color(100,50,60);        
+    Fstrip.Color2 = Fstrip.Color(0,0,100);
+    
+}
+
+void resetGame(){
+    // RESET ///////////////////////////////////////
+    Serial.println("resetting Game");
+
+    // close all the servos
     pwm.setPWM(servoPins[0], 0, servoMin);
     pwm.setPWM(servoPins[1], 0, servoMin);
+    pwm.setPWM(servoPins[2], 0, servoMin);
+    pwm.setPWM(servoPins[3], 0, servoMin);
+    pwm.setPWM(finalServo, 0, servoMin);
 
+    //reset all the strips
     restingStrips();
-    // reset the shit out of everything
-    Serial.println("game end, resetting");
-    endOfGame = false;
+
+    // shuffle pins
+    shuffle();
+
+    //clear all the booleans
     startServo = 0;
+    endOfGame = false;  
+}
+
+///// SERVO CONTROL //////////////////////////////////
+
+void openFlowers(int p, int s){
+    if(p == 11)
+    {
+        pwm.setPWM(servoPins[0], 0, servoMax); // grab servo 15
+        if(s == 1){
+            strip1open(); 
+        }
+        else if(s == 2)
+        {
+            strip2open();
+        }
+        else if(s == 3)
+        {
+            strip3open();
+            //Serial.println(p);
+        }
+        else if(s == 4)
+        {
+            strip4open();
+        }
+
+                
+    }
+    else if(p == 10)
+    {
+        pwm.setPWM(servoPins[1], 0, servoMax); // grab servo 14
+        if(s == 1){
+            strip1open(); 
+        }
+        else if(s == 2){
+            strip2open();
+        }
+        else if(s == 3)
+        {
+            strip3open();
+            //Serial.println(p);
+        } 
+        else if(s == 4)
+        {
+            strip4open();
+        }
+        
+    }
+    else if(p == 9)
+    {
+        pwm.setPWM(servoPins[2], 0, servoMax); // grab servo 13
+        if(s == 1){
+            strip1open(); 
+        }
+        else if(s == 2){
+            strip2open();
+        }
+        else if(s == 3)
+        {
+            strip3open();
+            //Serial.println(p);
+        }
+        else if(s == 4)
+        {
+            strip4open();
+        }
+        
+    }
+    else if(p == 8)
+    {
+        pwm.setPWM(servoPins[3], 0, servoMax); // grab servo 13
+        if(s == 1){
+            strip1open(); 
+        }
+        else if(s == 2){
+            strip2open();
+        }
+        else if(s == 3)
+        {
+            strip3open();
+            //Serial.println(p);
+        }
+        else if(s == 4)
+        {
+            strip4open();
+        }
+    }
     
+}
+
+void closeFlowers(int p, int s)
+{
+    if(p == 11)
+    {
+        pwm.setPWM(servoPins[0], 0, servoMin); // grab servo 15
+        if(s == 1)
+        {
+            strip1close();
+        }
+        else if(s == 2)
+        {
+            strip2close();
+        }
+        else if(s == 3)
+        {
+            strip3close();
+
+        }
+        else if(s == 4)
+        {
+            strip4close();
+        }    
+    }
+    else if(p == 10)
+    {
+        pwm.setPWM(servoPins[1], 0, servoMin); // grab servo 14
+        if(s == 1)
+        {
+            strip1close();
+        }
+        else if(s == 2)
+        {
+            strip2close();
+        } 
+        else if(s == 3)
+        {
+            strip3close();
+        }
+        else if(s == 4)
+        {
+            strip4close();
+        }        
+    }
+    else if(p == 9)
+    {
+        pwm.setPWM(servoPins[2], 0, servoMin); // grab servo 13
+        if(s == 1)
+        {
+            strip1close();
+        }
+        else if(s == 2)
+        {
+            strip2close();
+        } 
+        else if(s == 3)
+        {
+            strip3close();
+        }
+        else if(s == 4)
+        {
+            strip4close();
+        }
+    }
+    
+    else if(p == 8)
+    {
+        pwm.setPWM(servoPins[3], 0, servoMin); // grab servo 13
+        if(s == 1)
+        {
+            strip1close();
+        }
+        else if(s == 2)
+        {
+            strip2close();
+        } 
+        else if(s == 3)
+        {
+            strip3close();
+        }
+        else if(s == 4)
+        {
+            strip4close();
+        }
+    }
+}
+
+void finishFlowers(int p, int s)
+{
+    if(p == 11)
+    {
+        pwm.setPWM(servoPins[0], 0, servoMax); // grab servo 15
+        if(s == 1)
+        {
+            strip1finish();  
+        }
+        else if(s == 2)
+        {
+            strip2finish();  
+        }
+        else if(s == 3)
+        {
+            strip3finish();  
+        }
+        else if(s == 4)
+        {
+            strip4finish();
+        } 
+     
+    }
+    else if(p == 10)
+    {
+        pwm.setPWM(servoPins[1], 0, servoMax); // grab servo 14
+        if(s == 1)
+        {
+            strip1finish();  
+        }
+        else if(s == 2)
+        {
+            strip2finish(); 
+        }
+        else if(s == 3)
+        {
+            strip3finish();  
+        }
+        else if(s == 4)
+        {
+            strip4finish();
+            
+        }
+      
+    } 
+    else if(p == 9)
+    {
+        pwm.setPWM(servoPins[2], 0, servoMax); // grab servo 13
+        if(s == 1)
+        {
+            strip1finish();  
+        }
+        else if(s == 2)
+        {
+            strip2finish(); 
+        }
+        else if(s == 3)
+        {
+            strip3finish();  
+        } 
+        else if(s == 4)
+        {
+            strip4finish();
+        } 
+                
+    }
+    else if(p == 8)
+    {
+        pwm.setPWM(servoPins[3], 0, servoMax); // grab servo 13
+        if(s == 1)
+        {
+            strip1finish();  
+        }
+        else if(s == 2)
+        {
+            strip2finish(); 
+        }
+        else if(s == 3)
+        {
+            strip3finish();  
+        } 
+        else if(s == 4)
+        {
+            strip4finish();  
+        }
+    }
     
 }
 
 /////// NEOPATTERNS //////////////////////////
 
-void restingStrips(){
 
-    // do some randomizing of stuff. 
+
+void restingStrips(){
 
     Strip1.ActivePattern = COLOR_WIPE;
     Strip1.Interval = 20;
@@ -652,12 +812,15 @@ void restingStrips(){
 
     Strip3.ActivePattern = COLOR_WIPE;
     Strip3.Interval = 20;
-    Strip3.Color1 = Strip2.Color(100,0,100);
+    Strip3.Color1 = Strip3.Color(100,0,100);
 
-    /*Strip4.ActivePattern = COLOR_WIPE;
+    Strip4.ActivePattern = COLOR_WIPE;
     Strip4.Interval = 20;
-    Strip4.Color1 = Strip2.Color(0,0,100);*/
-    
+    Strip4.Color1 = Strip4.Color(0,100,100);
+
+    Fstrip.ActivePattern = COLOR_WIPE;
+    Fstrip.Interval = 20;
+    Fstrip.Color1 = Fstrip.Color(100,100,100); 
 
 }
 
@@ -683,6 +846,7 @@ void strip1finish(){
     // become a rainbow
     Strip1.ActivePattern = RAINBOW_CYCLE;
     Strip1.Interval = 3;
+
     
     
 }
@@ -737,31 +901,28 @@ void strip3finish(){
     
 }
 
-/// STRIP 3 ///////////////////////////////////
+/// STRIP 4 ///////////////////////////////////
 
 void strip4open(){
-    Strip2.ActivePattern = THEATER_CHASE;
-    Strip2.Interval = 100;
-    Strip2.Color1 = Strip2.Color(0,0,100);        
-    Strip2.Color2 = Strip2.Color(0,100,0);
+    Strip4.ActivePattern = THEATER_CHASE;
+    Strip4.Interval = 100;
+    Strip4.Color1 = Strip2.Color(100,100,0);        
+    Strip4.Color2 = Strip2.Color(0,100,100);
 
 }
 
 void strip4close(){
-    Strip2.ActivePattern = COLOR_WIPE;
-    Strip2.Interval = 20;
-    Strip2.Color1 = Strip2.Color(0,0,100);
-    
-
+    Strip4.ActivePattern = COLOR_WIPE;
+    Strip4.Interval = 20;
+    Strip4.Color1 = Strip2.Color(0,100,100);
 }
 
 void strip4finish(){
 
-    Strip2.ActivePattern = RAINBOW_CYCLE;
-    Strip2.Interval = 3;
+    Strip4.ActivePattern = RAINBOW_CYCLE;
+    Strip4.Interval = 3;
     
 }
-
 
 void stripComplete() {
 
