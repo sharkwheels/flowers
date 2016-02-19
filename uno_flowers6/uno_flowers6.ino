@@ -1,6 +1,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
+#include <elapsedMillis.h>
 
 
 // Pattern types supported:
@@ -296,7 +297,7 @@ class NeoPatterns : public Adafruit_NeoPixel
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
-#define servoMin  180 // this is the 'minimum' pulse length count (out of 4096)
+#define servoMin  190 // this is the 'minimum' pulse length count (out of 4096)
 #define servoMax  500 // this is the 'maximum' pulse length count (out of 4096)
 
 
@@ -309,11 +310,11 @@ const size_t n = sizeof(pixelPins) / sizeof(pixelPins[0]);
 const size_t o = sizeof(servoPins) / sizeof(servoPins[0]);
 
 // Initialize everything and prepare to start
-NeoPatterns Strip1(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
-NeoPatterns Strip2(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
-NeoPatterns Strip3(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
-NeoPatterns Strip4(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
-NeoPatterns Fstrip(32, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
+NeoPatterns Strip1(6, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
+NeoPatterns Strip2(6, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
+NeoPatterns Strip3(6, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
+NeoPatterns Strip4(6, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
+NeoPatterns Fstrip(6, 0, NEO_GRB + NEO_KHZ800, &stripComplete);
 
 //// SERIAL AND PYTHON //////////////////////////////////////////////
 byte incomingByte; // from python
@@ -322,9 +323,10 @@ int startServo = 0; // the incoming command shit
 
 //// GAME CONTROL ////////////////////////////////////////
 bool endOfGame = false;
-unsigned long timer; // the timer
-boolean timedOut = false; // set to true when timer fired
-unsigned long wait = 10000; // the timeout interval (10 sec)
+elapsedMillis timeElapsed; 
+unsigned int wait = 5000;
+
+//// SETUP ////////////////////////////////////////
 
 void setup()
 {
@@ -339,20 +341,22 @@ void setup()
     Fstrip.begin();
     
     // Kick off a pattern
-    Strip1.ColorWipe(Strip1.Color(100,0,0), 20); //red
-    Strip2.ColorWipe(Strip2.Color(0,100,0), 20); // green
-    Strip3.ColorWipe(Strip3.Color(100,0,100), 20); // purple
-    Strip4.ColorWipe(Strip4.Color(0,0,100), 20); // blue
-    Fstrip.ColorWipe(Strip4.Color(100,100,100), 20); // white
+    Strip1.ColorWipe(Strip1.Color(40,0,0), 20); //red
+    Strip2.ColorWipe(Strip2.Color(0,40,0), 20); // green
+    Strip3.ColorWipe(Strip3.Color(40,0,40), 20); // purple
+    Strip4.ColorWipe(Strip4.Color(0,0,40), 20); // blue
+    Fstrip.ColorWipe(Strip4.Color(40,40,40), 20); // white
 
     pwm.begin();
 	pwm.setPWMFreq(60);  // Analog servos run at ~60 Hz updates
 	yield();
     
-    timedOut = false; // allow timer to fire
-    timer = millis(); // start timer
+    Serial.println("setup done");
 
 }
+
+
+
  
 //// LOOP ////////////////////////////////////////
 void loop()
@@ -371,13 +375,16 @@ void loop()
     Strip4.Update();
     Fstrip.Update();
 
+
+
     /// Serial Start and Read ////////////////////////////////////
     if (Serial.available() > 0) 
     {
         //incomingByte = Serial.parseInt(); // use if testing from arduino input
         incomingByte = Serial.read(); // use if live
         command = incomingByte;
-        startServo = ServoGo(command);  
+        startServo = ServoGo(command);
+        timeElapsed = 0;   
     }
 
 
@@ -442,20 +449,20 @@ void loop()
         else if(startServo == 43)
         {   
 
-            // this is techinall the end of the game. Flower 4 is FINISHED. Which means all the 
-            // previous flowers are also finsihed.
-
+            finishFlowers(pixelPins[0],1);
+            finishFlowers(pixelPins[1],2);
+            finishFlowers(pixelPins[2],3);
             finishFlowers(pixelPins[3],4);
             pwm.setPWM(finalServo, 0, servoMax);
-            finalDisplay();
-            // wait 5 seconds
-            //delay(5000);
             
-            if ((!timedOut) && ((millis() - timer) > wait)) {
-                timedOut = true;
-                startServo = 70;
-                timedOut = false;
-                timer = millis();
+            Fstrip.ActivePattern = THEATER_CHASE;
+            Fstrip.Interval = 40;
+            Fstrip.Color1 = Fstrip.Color(40,50,60);        
+            Fstrip.Color2 = Fstrip.Color(0,0,40);
+            
+            if (timeElapsed >= wait) 
+            { 
+                startServo = 70;  
             }
         }
            
@@ -503,14 +510,7 @@ void shuffle()
 
 }
 
-void finalDisplay(){
-    
-    Fstrip.ActivePattern = THEATER_CHASE;
-    Fstrip.Interval = 100;
-    Fstrip.Color1 = Fstrip.Color(100,50,60);        
-    Fstrip.Color2 = Fstrip.Color(0,0,100);
-    
-}
+
 
 void resetGame(){
     // RESET ///////////////////////////////////////
@@ -531,7 +531,9 @@ void resetGame(){
 
     //clear all the booleans
     startServo = 0;
-    endOfGame = false;  
+    timeElapsed = 0;
+    endOfGame = false;
+
 }
 
 ///// SERVO CONTROL //////////////////////////////////
@@ -804,23 +806,23 @@ void restingStrips(){
 
     Strip1.ActivePattern = COLOR_WIPE;
     Strip1.Interval = 20;
-    Strip1.Color1 = Strip1.Color(100,0,0); 
+    Strip1.Color1 = Strip1.Color(40,0,0); 
 
     Strip2.ActivePattern = COLOR_WIPE;
     Strip2.Interval = 20;
-    Strip2.Color1 = Strip2.Color(0,100,0);
+    Strip2.Color1 = Strip2.Color(0,40,0);
 
     Strip3.ActivePattern = COLOR_WIPE;
     Strip3.Interval = 20;
-    Strip3.Color1 = Strip3.Color(100,0,100);
+    Strip3.Color1 = Strip3.Color(40,0,40);
 
     Strip4.ActivePattern = COLOR_WIPE;
     Strip4.Interval = 20;
-    Strip4.Color1 = Strip4.Color(0,100,100);
+    Strip4.Color1 = Strip4.Color(0,40,40);
 
     Fstrip.ActivePattern = COLOR_WIPE;
     Fstrip.Interval = 20;
-    Fstrip.Color1 = Fstrip.Color(100,100,100); 
+    Fstrip.Color1 = Fstrip.Color(40,40,40); 
 
 }
 
@@ -829,16 +831,16 @@ void restingStrips(){
 void strip1open(){
     // open and flash
     Strip1.ActivePattern = THEATER_CHASE;
-    Strip1.Interval = 100;
-    Strip1.Color1 = Strip1.Color(100,0,0); // red      
-    Strip1.Color2 = Strip1.Color(100,0,100); // purple
+    Strip1.Interval = 40;
+    Strip1.Color1 = Strip1.Color(40,0,0); // red      
+    Strip1.Color2 = Strip1.Color(40,0,40); // purple
 }
 
 void strip1close(){
     // close back to original color
     Strip1.ActivePattern = COLOR_WIPE;
     Strip1.Interval = 20;
-    Strip1.Color1 = Strip1.Color(100,0,0); // red
+    Strip1.Color1 = Strip1.Color(40,0,0); // red
     
 }
 
@@ -855,16 +857,16 @@ void strip1finish(){
 
 void strip2open(){
     Strip2.ActivePattern = THEATER_CHASE;
-    Strip2.Interval = 100;
-    Strip2.Color1 = Strip2.Color(0,100,0);  //green  
-    Strip2.Color2 = Strip2.Color(0,0,100); // blue
+    Strip2.Interval = 40;
+    Strip2.Color1 = Strip2.Color(0,40,0);  //green  
+    Strip2.Color2 = Strip2.Color(0,0,40); // blue
 
 }
 
 void strip2close(){
     Strip2.ActivePattern = COLOR_WIPE;
     Strip2.Interval = 20;
-    Strip2.Color1 = Strip2.Color(0,100,0); // green
+    Strip2.Color1 = Strip2.Color(0,40,0); // green
     
 
 }
@@ -872,7 +874,7 @@ void strip2close(){
 void strip2finish(){
 
     Strip2.ActivePattern = RAINBOW_CYCLE;
-    Strip2.Interval = 100;
+    Strip2.Interval = 40;
     
 }
 
@@ -880,16 +882,16 @@ void strip2finish(){
 
 void strip3open(){
     Strip3.ActivePattern = THEATER_CHASE;
-    Strip3.Interval = 100;
-    Strip3.Color1 = Strip2.Color(100,100,100);     // whiteish   
-    Strip3.Color2 = Strip2.Color(100,0,100); // purple
+    Strip3.Interval = 40;
+    Strip3.Color1 = Strip2.Color(40,40,40);     // whiteish   
+    Strip3.Color2 = Strip2.Color(40,0,40); // purple
 
 }
 
 void strip3close(){
     Strip3.ActivePattern = COLOR_WIPE;
     Strip3.Interval = 20;
-    Strip3.Color1 = Strip2.Color(100,0,100); // purple
+    Strip3.Color1 = Strip2.Color(40,0,40); // purple
     
 
 }
@@ -905,16 +907,16 @@ void strip3finish(){
 
 void strip4open(){
     Strip4.ActivePattern = THEATER_CHASE;
-    Strip4.Interval = 100;
-    Strip4.Color1 = Strip2.Color(100,100,0);        
-    Strip4.Color2 = Strip2.Color(0,100,100);
+    Strip4.Interval = 40;
+    Strip4.Color1 = Strip2.Color(40,40,0);        
+    Strip4.Color2 = Strip2.Color(0,40,40);
 
 }
 
 void strip4close(){
     Strip4.ActivePattern = COLOR_WIPE;
     Strip4.Interval = 20;
-    Strip4.Color1 = Strip2.Color(0,100,100);
+    Strip4.Color1 = Strip2.Color(0,40,40);
 }
 
 void strip4finish(){

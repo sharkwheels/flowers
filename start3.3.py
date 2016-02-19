@@ -37,13 +37,13 @@ gameEnd = False
 
 ### PYTHON SERIAL OUT #########################################
 
-ser = serial.Serial('/dev/cu.usbmodem14221', 9600)
+ser = serial.Serial('/dev/cu.usbmodem14211', 9600)
 time.sleep(3)
 
 if ser:
 	print("Connection to /dev/cu.usbmodem14231 established succesfully!\n")
 else:
-	print("Could not make connect to /dev/cu.usbmodem14221")
+	print("Could not make connect to /dev/cu.usbmodem1421")
 
 ### MYO DATA HELPERS ############################################
 
@@ -128,7 +128,7 @@ def parse_data(playerData):
 
 			## open flower one ########################
 			## both arms are pointed down
-			if p2pitch == 7 and p1pitch == 7 and not isActiveOne:
+			if p2pitch == 7 and p2pose == 'fist' and p1pitch == 7 and p1pose == 'fist' and not isActiveOne:
 				game_logic("f1open")
 				
 			
